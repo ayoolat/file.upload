@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
-
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,20 +23,31 @@ if (app.Environment.IsDevelopment())
 //       .WithExposedHeaders("Content-Disposition"));
 app.UseHttpsRedirection();
 
-
 app.MapPost("/upload", (HttpRequest request) =>
 {
-    var t = request;
+    var bodySizeFeature = request.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+    if (bodySizeFeature is not null && bodySizeFeature.MaxRequestBodySize > 31457280)
+    {
+        return Results.BadRequest("Request body large");
+    }
 
     if (!request.Form.Files.Any())
     {
         return Results.BadRequest("Please upload a file");
     }
-
-    
+    List<string> allowedExtensions = new List<string> { ".jpg", ".jpeg", ".png", ".pdf", ".doc", ".docx" };
 
     foreach (var file in request.Form.Files)
     {
+        String fileExtension = System.IO.Path.GetExtension(file.FileName).ToLower();
+
+       
+        if (!allowedExtensions.Contains(fileExtension))
+            return Results.BadRequest("Invalid file type.");
+
+        if (file.Length > 7340032)
+            return Results.BadRequest("File too large");
+
         string fileName = Path.GetFileName(file.FileName);
         string filePath = Path.Combine(Directory.GetCurrentDirectory(), "files", fileName);
 
@@ -50,6 +61,7 @@ app.MapPost("/upload", (HttpRequest request) =>
 })
 .Accepts<IFormFile>("multipart/form-data")
 .Produces(200);
+
 
 app.MapGet("/{fileName}",async (string fileName) =>
 {
